@@ -85,6 +85,7 @@
     clippy::unseparated_literal_suffix,
     clippy::wildcard_imports
 )]
+#![feature(let_chains)]
 
 #[cfg(not(no_alloc_crate))]
 extern crate alloc;
@@ -187,7 +188,13 @@ pub struct Version {
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(no_const_vec_new, derive(Default))]
 pub struct VersionReq {
-    pub comparators: Vec<Comparator>,
+    pub ranges: Vec<VersionRange>,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum VersionRange {
+    Hyphen(Comparator, Comparator),
+    Simple(Comparator),
 }
 
 /// A pair of comparison operator and partial version, such as `>=1.2`. Forms
@@ -447,9 +454,8 @@ impl VersionReq {
     /// pre-release component. Since `*` is not written with an explicit major,
     /// minor, and patch version, and does not contain a nonempty pre-release
     /// component, it does not match any pre-release versions.
-    #[cfg(not(no_const_vec_new))] // rustc <1.39
     pub const STAR: Self = VersionReq {
-        comparators: Vec::new(),
+        ranges: Vec::new(),
     };
 
     /// Create `VersionReq` by parsing from string representation.

@@ -34,6 +34,24 @@ fn assert_match_none(req: &VersionReq, versions: &[&str]) {
 }
 
 #[test]
+fn test_satisfies() {
+    assert_match_all(&req("*"), &["1.0.0"]);
+    assert_match_all(&req(""), &["1.0.0"]);
+
+    assert_match_all(&req("1.0.0 || 1.0.1"), &["1.0.0", "1.0.1"]);
+    assert_match_all(&req("1.0.0||1.0.1"), &["1.0.0", "1.0.1"]);
+    assert_match_all(&req("^1.0.5 || ^2.0.1"), &["1.0.6", "2.0.1"]);
+
+    assert_match_none(&req("1.0.0 || 1.0.1"), &["1.0.2"]);
+
+    assert_match_all(&req("1.0.3 - 3.0.0"), &["1.0.3", "2.0.0", "3.0.0"]);
+    assert_match_none(&req("1.0.3 - 3.0.0"), &["1.0.0", "3.0.1"]);
+
+    assert_match_all(&req("1.0.3 - 3.0.0 || ^4"), &["1.0.3", "2.0.0", "3.0.0", "4.0.0"]);
+    assert_match_none(&req("1.0.3 - 3.0.0 || ^4"), &["1.0.0", "5.0.0"]);
+}
+
+#[test]
 fn test_basic() {
     let ref r = req("1.0.0");
     assert_to_string(r, "^1.0.0");

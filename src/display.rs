@@ -1,4 +1,4 @@
-use crate::{BuildMetadata, Comparator, Op, Prerelease, Version, VersionReq};
+use crate::{BuildMetadata, Comparator, Op, Prerelease, Version, VersionReq, VersionRange};
 use core::fmt::{self, Alignment, Debug, Display, Write};
 
 impl Display for Version {
@@ -32,15 +32,25 @@ impl Display for Version {
 
 impl Display for VersionReq {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        if self.comparators.is_empty() {
+        if self.ranges.is_empty() {
             return formatter.write_str("*");
         }
-        for (i, comparator) in self.comparators.iter().enumerate() {
+        for (i, range) in self.ranges.iter().enumerate() {
             if i > 0 {
-                formatter.write_str(", ")?;
+                formatter.write_str(" || ")?;
             }
-            write!(formatter, "{}", comparator)?;
+            write!(formatter, "{}", range)?;
         }
+        Ok(())
+    }
+}
+
+impl Display for VersionRange {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        let _ = match self {
+            VersionRange::Simple(simple) => write!(formatter, "{}", simple),
+            VersionRange::Hyphen(left, right) => write!(formatter, "{} - {}", left, right),
+        };
         Ok(())
     }
 }

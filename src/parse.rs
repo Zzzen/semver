@@ -1,4 +1,4 @@
-use crate::backport::*;
+use crate::{backport::*, VersionRange};
 use crate::error::{ErrorKind, Position};
 use crate::identifier::Identifier;
 use crate::{BuildMetadata, Comparator, Op, Prerelease, Version, VersionReq};
@@ -86,15 +86,13 @@ impl FromStr for VersionReq {
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let text = text.trim_start_matches(' ');
+        if text.is_empty() {
+            return Ok(VersionReq::STAR);
+        }
         if let Some((ch, text)) = wildcard(text) {
             let rest = text.trim_start_matches(' ');
             if rest.is_empty() {
-                #[cfg(not(no_const_vec_new))]
                 return Ok(VersionReq::STAR);
-                #[cfg(no_const_vec_new)] // rustc <1.39
-                return Ok(VersionReq {
-                    comparators: Vec::new(),
-                });
             } else if rest.starts_with(',') {
                 return Err(Error::new(ErrorKind::WildcardNotTheOnlyComparator(ch)));
             } else {
@@ -103,10 +101,9 @@ impl FromStr for VersionReq {
         }
 
         let depth = 0;
-        let mut comparators = Vec::new();
-        let len = version_req(text, &mut comparators, depth)?;
-        unsafe { comparators.set_len(len) }
-        Ok(VersionReq { comparators })
+        let mut ranges = Vec::new();
+        version_req(text, &mut ranges, depth)?;
+        Ok(VersionReq { ranges })
     }
 }
 
@@ -115,7 +112,7 @@ impl FromStr for Comparator {
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let text = text.trim_start_matches(' ');
-        let (comparator, pos, rest) = comparator(text)?;
+        let (comparator, pos, rest) = parse_comparator(text)?;
         if !rest.is_empty() {
             let unexpected = rest.chars().next().unwrap();
             return Err(Error::new(ErrorKind::UnexpectedCharAfter(pos, unexpected)));
@@ -155,7 +152,7 @@ impl Error {
 }
 
 impl Op {
-    const DEFAULT: Self = Op::Caret;
+    const DEFAULT: Self = Op::Exact;
 }
 
 fn numeric_identifier(input: &str, pos: Position) -> Result<(u64, &str), Error> {
@@ -289,7 +286,8 @@ fn op(input: &str) -> (Op, &str) {
     }
 }
 
-fn comparator(input: &str) -> Result<(Comparator, Position, &str), Error> {
+fn parse_comparator(input: &str) -> Result<(Comparator, Position, &str), Error> {
+    let input = input.trim_start_matches(' ');
     let (mut op, text) = op(input);
     let default_op = input.len() == text.len();
     let text = text.trim_start_matches(' ');
@@ -355,7 +353,7 @@ fn comparator(input: &str) -> Result<(Comparator, Position, &str), Error> {
         text
     };
 
-    let text = text.trim_start_matches(' ');
+    // let text = text.trim_start_matches(' ');
 
     let comparator = Comparator {
         op,
@@ -368,8 +366,8 @@ fn comparator(input: &str) -> Result<(Comparator, Position, &str), Error> {
     Ok((comparator, pos, text))
 }
 
-fn version_req(input: &str, out: &mut Vec<Comparator>, depth: usize) -> Result<usize, Error> {
-    let (comparator, pos, text) = match comparator(input) {
+fn version_req(input: &str, out: &mut Vec<VersionRange>, depth: usize) -> Result<usize, Error> {
+    let (comparator, _pos, text) = match parse_comparator(input) {
         Ok(success) => success,
         Err(mut error) => {
             if let Some((ch, mut rest)) = wildcard(input) {
@@ -383,27 +381,49 @@ fn version_req(input: &str, out: &mut Vec<Comparator>, depth: usize) -> Result<u
     };
 
     if text.is_empty() {
-        out.reserve_exact(depth + 1);
-        unsafe { out.as_mut_ptr().add(depth).write(comparator) }
+        out.push(VersionRange::Simple(comparator));
         return Ok(depth + 1);
     }
 
-    let text = if let Some(text) = text.strip_prefix(',') {
-        text.trim_start_matches(' ')
-    } else {
-        let unexpected = text.chars().next().unwrap();
-        return Err(Error::new(ErrorKind::ExpectedCommaFound(pos, unexpected)));
-    };
+    let len = text.len();
+    let text = text.trim_start_matches(' ');
+    let has_whitespace = len != text.len();
 
-    const MAX_COMPARATORS: usize = 32;
-    if depth + 1 == MAX_COMPARATORS {
-        return Err(Error::new(ErrorKind::ExcessiveComparators));
+    if has_whitespace && let Some(text) = text.strip_prefix("- ") {
+        if let Ok((right, _pos, text)) = parse_comparator(text) {
+            out.push(VersionRange::Hyphen(comparator, right));
+            if text.is_empty() {
+                return Ok(depth + 1);
+            }
+            // return version_req(text, out, depth + 1);
+        } else {
+            return Err(Error::new(ErrorKind::ExpectedComparator(text.chars().next().unwrap())));
+        }
+    } else {
+        out.push(VersionRange::Simple(comparator));
     }
+
+    let text = match has_whitespace {
+        true => text.trim_start_matches(' '),
+        false => text,
+    };
+    if let Some(text) = text.strip_prefix("||") {
+        return version_req(text, out, depth + 1)
+    } else {
+        // let unexpected = text.chars().next().unwrap();
+        // return Err(Error::new(ErrorKind::ExpectedCommaFound(pos, unexpected)));
+    };
+    return Ok(depth + 1);
+
+    // const MAX_COMPARATORS: usize = 32;
+    // if depth + 1 == MAX_COMPARATORS {
+    //     return Err(Error::new(ErrorKind::ExcessiveComparators));
+    // }
 
     // Recurse to collect parsed Comparator objects on the stack. We perform a
     // single allocation to allocate exactly the right sized Vec only once the
     // total number of comparators is known.
-    let len = version_req(text, out, depth + 1)?;
-    unsafe { out.as_mut_ptr().add(depth).write(comparator) }
-    Ok(len)
+    // let len = version_req(text, out, depth + 1)?;
+    // unsafe { out.as_mut_ptr().add(depth).write(comparator) }
+    // Ok(len)
 }

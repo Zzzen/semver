@@ -1,10 +1,23 @@
-use crate::{Comparator, Op, Version, VersionReq};
+use crate::{Comparator, Op, Version, VersionReq, VersionRange};
 
 pub(crate) fn matches_req(req: &VersionReq, ver: &Version) -> bool {
-    for cmp in &req.comparators {
-        if !matches_impl(cmp, ver) {
-            return false;
+    if req.ranges.is_empty() {
+        return true;
+    }
+    let matched_range = req.ranges.iter().any(|range| {
+        match range {
+            VersionRange::Simple(cmp) => {
+                matches_impl(&cmp, ver)
+            },
+            VersionRange::Hyphen(left, right) => {
+                (matches_exact(&left, ver) || matches_greater(&left, ver)) &&
+                (matches_exact(&right, ver) || matches_less(&right, ver))
+            }
         }
+    });
+
+    if !matched_range {
+        return false;
     }
 
     if ver.pre.is_empty() {
@@ -14,13 +27,16 @@ pub(crate) fn matches_req(req: &VersionReq, ver: &Version) -> bool {
     // If a version has a prerelease tag (for example, 1.2.3-alpha.3) then it
     // will only be allowed to satisfy req if at least one comparator with the
     // same major.minor.patch also has a prerelease tag.
-    for cmp in &req.comparators {
-        if pre_is_compatible(cmp, ver) {
-            return true;
+    req.ranges.iter().any(|range| {
+        match range {
+            VersionRange::Simple(cmp) => {
+                pre_is_compatible(&cmp, ver)
+            },
+            VersionRange::Hyphen(left, right) => {
+                pre_is_compatible(&left, ver) || pre_is_compatible(&right, ver)
+            }
         }
-    }
-
-    false
+    })
 }
 
 pub(crate) fn matches_comparator(cmp: &Comparator, ver: &Version) -> bool {

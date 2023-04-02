@@ -6,6 +6,7 @@ pub(crate) enum ErrorKind {
     UnexpectedEnd(Position),
     UnexpectedChar(Position, char),
     UnexpectedCharAfter(Position, char),
+    #[allow(dead_code)]
     ExpectedCommaFound(Position, char),
     LeadingZero(Position),
     Overflow(Position),
@@ -13,7 +14,9 @@ pub(crate) enum ErrorKind {
     IllegalCharacter(Position),
     WildcardNotTheOnlyComparator(char),
     UnexpectedAfterWildcard,
+    #[allow(dead_code)]
     ExcessiveComparators,
+    ExpectedComparator(char),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -84,6 +87,13 @@ impl Display for Error {
             }
             ErrorKind::ExcessiveComparators => {
                 formatter.write_str("excessive number of version comparators")
+            }
+            ErrorKind::ExpectedComparator(ch) => {
+                write!(
+                    formatter,
+                    "expected version comparator after hyphen ({})",
+                    ch,
+                )
             }
         }
     }

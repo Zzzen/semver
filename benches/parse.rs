@@ -19,6 +19,6 @@ fn parse_version(b: &mut Bencher) {
 
 #[bench]
 fn parse_version_req(b: &mut Bencher) {
-    let text = ">=1.2.3, <2.0.0";
+    let text = "^1.2.3";
     b.iter(|| black_box(text).parse::<VersionReq>().unwrap());
 }
