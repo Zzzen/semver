@@ -100,9 +100,8 @@ impl FromStr for VersionReq {
             }
         }
 
-        let depth = 0;
         let mut ranges = Vec::new();
-        version_req(text, &mut ranges, depth)?;
+        version_req(text, &mut ranges)?;
         Ok(VersionReq { ranges })
     }
 }
@@ -366,7 +365,7 @@ fn parse_comparator(input: &str) -> Result<(Comparator, Position, &str), Error> 
     Ok((comparator, pos, text))
 }
 
-fn version_req(input: &str, out: &mut Vec<VersionRange>, depth: usize) -> Result<usize, Error> {
+fn version_req(input: &str, out: &mut Vec<VersionRange>) -> Result<(), Error> {
     let (comparator, _pos, text) = match parse_comparator(input) {
         Ok(success) => success,
         Err(mut error) => {
@@ -382,7 +381,7 @@ fn version_req(input: &str, out: &mut Vec<VersionRange>, depth: usize) -> Result
 
     if text.is_empty() {
         out.push(VersionRange::Simple(comparator));
-        return Ok(depth + 1);
+        return Ok(());
     }
 
     let len = text.len();
@@ -393,8 +392,14 @@ fn version_req(input: &str, out: &mut Vec<VersionRange>, depth: usize) -> Result
         if let Ok((right, _pos, text)) = parse_comparator(text) {
             out.push(VersionRange::Hyphen(comparator, right));
             if text.is_empty() {
-                return Ok(depth + 1);
+                return Ok(());
             }
+            let text = text.trim_start_matches(' ');
+            if let Some(text) = text.strip_prefix("||") {
+                return version_req(text, out)
+            }
+            // TODO: maybe return an error here?
+            return Ok(());
             // return version_req(text, out, depth + 1);
         } else {
             return Err(Error::new(ErrorKind::ExpectedComparator(text.chars().next().unwrap())));
@@ -403,17 +408,13 @@ fn version_req(input: &str, out: &mut Vec<VersionRange>, depth: usize) -> Result
         out.push(VersionRange::Simple(comparator));
     }
 
-    let text = match has_whitespace {
-        true => text.trim_start_matches(' '),
-        false => text,
-    };
     if let Some(text) = text.strip_prefix("||") {
-        return version_req(text, out, depth + 1)
+        return version_req(text, out)
     } else {
         // let unexpected = text.chars().next().unwrap();
         // return Err(Error::new(ErrorKind::ExpectedCommaFound(pos, unexpected)));
     };
-    return Ok(depth + 1);
+    return Ok(());
 
     // const MAX_COMPARATORS: usize = 32;
     // if depth + 1 == MAX_COMPARATORS {
