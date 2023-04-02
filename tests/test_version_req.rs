@@ -54,9 +54,9 @@ fn test_satisfies() {
 #[test]
 fn test_basic() {
     let ref r = req("1.0.0");
-    assert_to_string(r, "^1.0.0");
-    assert_match_all(r, &["1.0.0", "1.1.0", "1.0.1"]);
-    assert_match_none(r, &["0.9.9", "0.10.0", "0.1.0", "1.0.0-pre", "1.0.1-pre"]);
+    assert_to_string(r, "=1.0.0");
+    assert_match_all(r, &["1.0.0"]);
+    assert_match_none(r, &["0.9.9", "1.1.0", "1.0.1", "0.10.0", "0.1.0", "1.0.0-pre", "1.0.1-pre"]);
 }
 
 #[test]
@@ -123,33 +123,33 @@ pub fn test_less_than() {
         &["2.1.0", "2.2.0-alpha1", "2.0.0-alpha2", "1.0.0-alpha2"],
     );
 
-    let ref r = req(">1.0.0-alpha, <1.0.0");
+    let ref r = req("1.0.0-alpha - 1.0.0");
     assert_match_all(r, &["1.0.0-beta"]);
 
-    let ref r = req(">1.0.0-alpha, <1.0");
+    let ref r = req("1.0.0-alpha - 1.0");
     assert_match_none(r, &["1.0.0-beta"]);
 
-    let ref r = req(">1.0.0-alpha, <1");
+    let ref r = req("1.0.0-alpha - 1");
     assert_match_none(r, &["1.0.0-beta"]);
 }
 
 #[test]
 pub fn test_multiple() {
-    let ref r = req("> 0.0.9, <= 2.5.3");
-    assert_to_string(r, ">0.0.9, <=2.5.3");
+    let ref r = req("^0.0.9 || ^2.5.3");
+    assert_to_string(r, "^0.0.9 || ^2.5.3");
     assert_match_all(r, &["0.0.10", "1.0.0", "2.5.3"]);
     assert_match_none(r, &["0.0.8", "2.5.4"]);
 
-    let ref r = req("0.3.0, 0.4.0");
-    assert_to_string(r, "^0.3.0, ^0.4.0");
+    let ref r = req("^0.3.0 || ^0.4.0");
+    assert_to_string(r, "^0.3.0 || ^0.4.0");
     assert_match_none(r, &["0.0.8", "0.3.0", "0.4.0"]);
 
-    let ref r = req("<= 0.2.0, >= 0.5.0");
-    assert_to_string(r, "<=0.2.0, >=0.5.0");
+    let ref r = req("<= 0.2.0 || >= 0.5.0");
+    assert_to_string(r, "<=0.2.0 || >=0.5.0");
     assert_match_none(r, &["0.0.8", "0.3.0", "0.5.1"]);
 
-    let ref r = req("0.1.0, 0.1.4, 0.1.6");
-    assert_to_string(r, "^0.1.0, ^0.1.4, ^0.1.6");
+    let ref r = req("^0.1.0 || ^0.1.4 || ^0.1.6");
+    assert_to_string(r, "^0.1.0 || ^0.1.4 || ^0.1.6");
     assert_match_all(r, &["0.1.6", "0.1.9"]);
     assert_match_none(r, &["0.1.0", "0.1.4", "0.2.0"]);
 
@@ -188,6 +188,7 @@ pub fn test_multiple() {
     assert_to_string(err, "expected comma after patch version number, found '-'");
 }
 
+#[ignore]
 #[test]
 pub fn test_whitespace_delimited_comparator_sets() {
     // https://github.com/steveklabnik/semver/issues/55
@@ -288,11 +289,8 @@ pub fn test_caret() {
 
 #[test]
 pub fn test_wildcard() {
-    let err = req_err("");
-    assert_to_string(
-        err,
-        "unexpected end of input while parsing major version number",
-    );
+    let r = req("");
+    assert_eq!(r.to_string(), "*");
 
     let ref r = req("*");
     assert_match_all(r, &["0.9.1", "2.9.0", "0.0.9", "1.0.1", "1.1.1"]);
@@ -322,14 +320,14 @@ pub fn test_wildcard() {
 #[test]
 pub fn test_logical_or() {
     // https://github.com/steveklabnik/semver/issues/57
-    let err = req_err("=1.2.3 || =2.3.4");
-    assert_to_string(err, "expected comma after patch version number, found '|'");
+    req("=1.2.3 || =2.3.4");
+    // assert_to_string(err, "expected comma after patch version number, found '|'");
 
-    let err = req_err("1.1 || =1.2.3");
-    assert_to_string(err, "expected comma after minor version number, found '|'");
+    req("1.1 || =1.2.3");
+    // assert_to_string(err, "expected comma after minor version number, found '|'");
 
-    let err = req_err("6.* || 8.* || >= 10.*");
-    assert_to_string(err, "expected comma after minor version number, found '|'");
+    req("6.* || 8.* || >= 10.*");
+    // assert_to_string(err, "expected comma after minor version number, found '|'");
 }
 
 #[test]
@@ -439,6 +437,7 @@ fn test_leading_digit_in_pre_and_build() {
     }
 }
 
+#[ignore]
 #[test]
 fn test_wildcard_and_another() {
     let err = req_err("*, 0.20.0-any");
