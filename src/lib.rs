@@ -20,7 +20,7 @@
 //! use semver::{BuildMetadata, Prerelease, Version, VersionReq};
 //!
 //! fn main() {
-//!     let req = VersionReq::parse(">=1.2.3, <1.8.0").unwrap();
+//!     let req = VersionReq::parse(">=1.2.3 <1.8.0").unwrap();
 //!
 //!     // Check whether this requirement matches version 1.2.3-alpha.1 (no)
 //!     let version = Version {
@@ -85,7 +85,6 @@
     clippy::unseparated_literal_suffix,
     clippy::wildcard_imports
 )]
-#![feature(let_chains)]
 
 #[cfg(not(no_alloc_crate))]
 extern crate alloc;
@@ -195,6 +194,7 @@ pub struct VersionReq {
 pub enum VersionRange {
     Hyphen(Comparator, Comparator),
     Simple(Comparator),
+    Intersection(Vec<Comparator>),
 }
 
 /// A pair of comparison operator and partial version, such as `>=1.2`. Forms

@@ -50,6 +50,15 @@ impl Display for VersionRange {
         let _ = match self {
             VersionRange::Simple(simple) => write!(formatter, "{}", simple),
             VersionRange::Hyphen(left, right) => write!(formatter, "{} - {}", left, right),
+            VersionRange::Intersection(comparators) => {
+                for (i, comparator) in comparators.iter().enumerate() {
+                    if i > 0 {
+                        formatter.write_str(" ")?;
+                    }
+                    write!(formatter, "{}", comparator)?;
+                }
+                Ok(())
+            }
         };
         Ok(())
     }

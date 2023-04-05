@@ -101,7 +101,7 @@ impl FromStr for VersionReq {
         }
 
         let mut ranges = Vec::new();
-        version_req(text, &mut ranges)?;
+        parser_version_req(text, &mut ranges)?;
         Ok(VersionReq { ranges })
     }
 }
@@ -352,7 +352,7 @@ fn parse_comparator(input: &str) -> Result<(Comparator, Position, &str), Error> 
         text
     };
 
-    // let text = text.trim_start_matches(' ');
+    let text = text.trim_start_matches(' ');
 
     let comparator = Comparator {
         op,
@@ -365,66 +365,46 @@ fn parse_comparator(input: &str) -> Result<(Comparator, Position, &str), Error> 
     Ok((comparator, pos, text))
 }
 
-fn version_req(input: &str, out: &mut Vec<VersionRange>) -> Result<(), Error> {
-    let (comparator, _pos, text) = match parse_comparator(input) {
-        Ok(success) => success,
-        Err(mut error) => {
-            if let Some((ch, mut rest)) = wildcard(input) {
-                rest = rest.trim_start_matches(' ');
-                if rest.is_empty() || rest.starts_with(',') {
-                    error.kind = ErrorKind::WildcardNotTheOnlyComparator(ch);
-                }
-            }
-            return Err(error);
-        }
-    };
+fn parser_version_req(text: &str, out: &mut Vec<VersionRange>) -> Result<(), Error> {
+    if text.is_empty() {
+        return Ok(());
+    }
+    let (comparator, _pos, text) = parse_comparator(text)?;
 
     if text.is_empty() {
         out.push(VersionRange::Simple(comparator));
         return Ok(());
-    }
-
-    let len = text.len();
-    let text = text.trim_start_matches(' ');
-    let has_whitespace = len != text.len();
-
-    if has_whitespace && let Some(text) = text.strip_prefix("- ") {
-        if let Ok((right, _pos, text)) = parse_comparator(text) {
-            out.push(VersionRange::Hyphen(comparator, right));
-            if text.is_empty() {
-                return Ok(());
-            }
-            let text = text.trim_start_matches(' ');
-            if let Some(text) = text.strip_prefix("||") {
-                return version_req(text, out)
-            }
-            // TODO: maybe return an error here?
+    } else if let Some(text) = text.strip_prefix("||") {
+        out.push(VersionRange::Simple(comparator));
+        parser_version_req(text, out)?;
+        return Ok(());
+    } else if let Some(text) = text.strip_prefix('-') {
+        let (right, _pos, text) = parse_comparator(text)?;
+        out.push(VersionRange::Hyphen(comparator, right));
+        if text.is_empty() {
             return Ok(());
-            // return version_req(text, out, depth + 1);
+        } else if let Some(text) = text.strip_prefix("||") {
+            parser_version_req(text, out)?;
+            return Ok(());
         } else {
-            return Err(Error::new(ErrorKind::ExpectedComparator(text.chars().next().unwrap())));
+            return Err(Error::new(ErrorKind::UnexpectedChar(_pos, text.chars().next().unwrap())));
         }
     } else {
-        out.push(VersionRange::Simple(comparator));
+        let mut comparators = vec![comparator];
+        let mut text = text;
+        loop {
+            let (comparator, _pos, remaining_text) = parse_comparator(text)?;
+            text = remaining_text;
+            comparators.push(comparator);
+            if text.is_empty() {
+                out.push(VersionRange::Intersection(comparators));
+                return Ok(());
+            } else if let Some(text) = text.strip_prefix("||") {
+                out.push(VersionRange::Intersection(comparators));
+                parser_version_req(text, out)?;
+                break;
+            }
+        }
+        return Ok(());
     }
-
-    if let Some(text) = text.strip_prefix("||") {
-        return version_req(text, out)
-    } else {
-        // let unexpected = text.chars().next().unwrap();
-        // return Err(Error::new(ErrorKind::ExpectedCommaFound(pos, unexpected)));
-    };
-    return Ok(());
-
-    // const MAX_COMPARATORS: usize = 32;
-    // if depth + 1 == MAX_COMPARATORS {
-    //     return Err(Error::new(ErrorKind::ExcessiveComparators));
-    // }
-
-    // Recurse to collect parsed Comparator objects on the stack. We perform a
-    // single allocation to allocate exactly the right sized Vec only once the
-    // total number of comparators is known.
-    // let len = version_req(text, out, depth + 1)?;
-    // unsafe { out.as_mut_ptr().add(depth).write(comparator) }
-    // Ok(len)
 }

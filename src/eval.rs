@@ -1,10 +1,7 @@
 use crate::{Comparator, Op, Version, VersionReq, VersionRange};
 
 pub(crate) fn matches_req(req: &VersionReq, ver: &Version) -> bool {
-    if req.ranges.is_empty() {
-        return true;
-    }
-    let matched_range = req.ranges.iter().any(|range| {
+    let matched_range = req.ranges.is_empty() || req.ranges.iter().any(|range| {
         match range {
             VersionRange::Simple(cmp) => {
                 matches_impl(&cmp, ver)
@@ -12,6 +9,9 @@ pub(crate) fn matches_req(req: &VersionReq, ver: &Version) -> bool {
             VersionRange::Hyphen(left, right) => {
                 (matches_exact(&left, ver) || matches_greater(&left, ver)) &&
                 (matches_exact(&right, ver) || matches_less(&right, ver))
+            },
+            VersionRange::Intersection(comparators) => {
+                comparators.iter().all(|cmp| matches_impl(&cmp, ver))
             }
         }
     });
@@ -34,6 +34,9 @@ pub(crate) fn matches_req(req: &VersionReq, ver: &Version) -> bool {
             },
             VersionRange::Hyphen(left, right) => {
                 pre_is_compatible(&left, ver) || pre_is_compatible(&right, ver)
+            },
+            VersionRange::Intersection(comparators) => {
+                comparators.iter().any(|cmp| pre_is_compatible(&cmp, ver))
             }
         }
     })

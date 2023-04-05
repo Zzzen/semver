@@ -16,6 +16,7 @@ pub(crate) enum ErrorKind {
     UnexpectedAfterWildcard,
     #[allow(dead_code)]
     ExcessiveComparators,
+    #[allow(dead_code)]
     ExpectedComparator(char),
 }
 
